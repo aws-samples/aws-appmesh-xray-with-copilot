@@ -1,0 +1,125 @@
+# The manifest for the "ecsdemo-crystal" service.
+# Read the full specification for the "Backend Service" type at:
+#  https://aws.github.io/copilot-cli/docs/manifest/backend-service/
+
+# Your service name will be used in naming your resources like log groups, ECS services, etc.
+name: ecsdemo-crystal
+type: Backend Service
+
+# Your service is reachable at "http://ecsdemo-crystal.${COPILOT_SERVICE_DISCOVERY_ENDPOINT}:3000" but is not public.
+
+# Configuration for your containers and service.
+image:
+  # Docker build arguments. For additional overrides: https://aws.github.io/copilot-cli/docs/manifest/backend-service/#image-build
+  build: ecsdemo-crystal/Dockerfile
+  #depends_on:
+    #envoy: healthy
+    #startup: success
+  # Port exposed through your container to route traffic to it.
+  port: 3000
+  healthcheck:
+    # Container health checks: https://aws.github.io/copilot-cli/docs/manifest/backend-service/#image-healthcheck
+    command: ["CMD-SHELL", "curl -f -s http://localhost:3000/health || exit 1"]
+    interval: 10s
+    retries: 5
+    timeout: 3s
+    start_period: 0s
+  depends_on:
+    envoy: healthy
+
+cpu: 512       # Number of CPU units for the task.
+memory: 1024    # Amount of memory in MiB used by the task.
+count: 3       # Number of tasks that should be running in your service.
+exec: true     # Enable running commands in your container.
+
+# Optional fields for more advanced use-cases.
+#
+#variables:                    # Pass environment variables as key value pairs.
+#  LOG_LEVEL: info
+
+#secrets:                      # Pass secrets from AWS Systems Manager (SSM) Parameter Store.
+#  GITHUB_TOKEN: GITHUB_TOKEN  # The key is the name of the environment variable, the value is the name of the SSM parameter.
+
+# You can override any of the values defined above by environment.
+#environments:
+#  test:
+#    count: 2               # Number of tasks to run for the "test" environment.
+#    deployment:            # The deployment strategy for the "test" environment.
+#       rolling: 'recreate' # Stops existing tasks before new ones are started for faster deployments.
+# observability:
+#   tracing: awsxray
+
+sidecars:
+  envoy:
+    port: 9901
+    #user: 1337
+    image: public.ecr.aws/appmesh/aws-appmesh-envoy:v1.18.3.0-prod
+    cpu: 512       # Number of CPU units for the task.
+    memory: 1024    # Amount of memory in MiB used by the task.
+    variables:
+      #REGION: us-east-1
+      ENVOY_LOG_LEVEL: trace
+      ENABLE_ENVOY_STATS_TAGS: 1
+      ENABLE_ENVOY_XRAY_TRACING: 1
+      #arn:aws:appmesh:us-east-1:787843526639:mesh/appmesh-workshop/virtualNode/crystal-lb-vanilla
+      #arn:aws:appmesh:us-east-1:787843526639:mesh/appmesh-workshop/virtualGateway/ecsworkshop-vgw
+      #APPMESH_RESOURCE_ARN: arn:aws:appmesh:us-east-1:787843526639:mesh/appmesh-workshop/virtualNode/crystal-lb-vanilla
+    # proxyConfiguration:
+    #   type: APPMESH
+    #   containerName: envoy
+    #   properties: [
+    #         { "name": "IgnoredUID", "value": "1337"},
+    #         { "name": "ProxyIngressPort", "value": "15000"},
+    #         { "name": "ProxyEgressPort", "value": "15001"},
+    #         { "name": "AppPorts", "value": "3000"},
+    #         { "name": "EgressIgnoredIPs", "value": "169.254.170.2,169.254.169.254"}
+    #       ]
+    healthcheck:
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      command: [
+        "CMD-SHELL",
+        "curl -s http://localhost:9901/server_info | grep state | grep -q LIVE"
+      ]
+  xray:
+    port: 2000/udp
+    #user: 1337
+    essential: true
+    image: amazon/aws-xray-daemon
+    cpu: 512       # Number of CPU units for the task.
+    memory: 1024    # Amount of memory in MiB used by the task.
+    #entrypoint: ["/usr/bin/xray", "-b", "0.0.0.0:2000", "-o"]
+    healthcheck:
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      command: [
+        "CMD-SHELL",
+        "timeout 1 /bin/bash -c \"</dev/udp/localhost/2000\""
+      ]
+
+taskdef_overrides:
+  - path: ContainerDefinitions[1].User
+    value: 1337
+  - path: ContainerDefinitions[2].User
+    value: 1337
+  # - path: ContainerDefinitions[1].User
+  #   value: 1337
+  # - path: ContainerDefinitions[2].User
+  #   value: 1337
+  - path: ProxyConfiguration
+    value:
+        ContainerName: "envoy"
+        Type: "APPMESH"
+        ProxyConfigurationProperties:
+        - Name: "AppPorts"
+          Value: "3000" # nodejs application port
+        - Name: "ProxyIngressPort"
+          Value: "15000" # side card default config
+        - Name: "ProxyEgressPort"
+          Value: "15001" # side card default config
+        - Name: "EgressIgnoredIPs"
+          Value: "169.254.170.2,169.254.169.254"
+        - Name: "IgnoredUID"
+          Value: "1337" # side card default config

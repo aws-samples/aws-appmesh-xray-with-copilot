@@ -1,0 +1,112 @@
+# The manifest for the "ecsdemo-envoygw" service.
+# Read the full specification for the "Load Balanced Web Service" type at:
+#  https://aws.github.io/copilot-cli/docs/manifest/lb-web-service/
+
+# Your service name will be used in naming your resources like log groups, ECS services, etc.
+name: ecsdemo-envoygw
+type: Load Balanced Web Service
+
+# Distribute traffic to your service.
+http: false
+nlb:
+  #alias: 'ecsdemo-workshop.local'
+  port: 80/tcp
+  target_container: ecsdemo-envoygw
+  target_port: 3000
+  healthcheck:
+    port: 3000
+    interval: 10s
+    timeout: 10s
+  # You can specify a custom health check path. The default is "/".
+  # healthcheck: '/'
+
+# network:
+#   vpc:
+#     placement: 'private'
+
+# Configuration for your containers and service.
+image:
+  # Docker build arguments. For additional overrides: https://aws.github.io/copilot-cli/docs/manifest/lb-web-service/#image-build
+  build: appmesh-gateway/Dockerfile
+  # Port exposed through your container to route traffic to it.
+  port: 3000
+  depends_on:
+    xray: healthy
+
+cpu: 512       # Number of CPU units for the task.
+memory: 1024    # Amount of memory in MiB used by the task.
+count: 1       # Number of tasks that should be running in your service.
+exec: true     # Enable running commands in your container.
+
+# Optional fields for more advanced use-cases.
+#
+variables:
+  #REGION: us-east-1
+  ENVOY_LOG_LEVEL: trace
+  ENABLE_ENVOY_STATS_TAGS: 1
+  ENABLE_ENVOY_XRAY_TRACING: 1
+  #arn:aws:appmesh:us-east-1:787843526639:mesh/appmesh-workshop/virtualNode/crystal-lb-vanilla
+  #arn:aws:appmesh:us-east-1:787843526639:mesh/appmesh-workshop/virtualGateway/ecsworkshop-vgw
+  #APPMESH_RESOURCE_ARN: arn:aws:appmesh:us-east-1:787843526639:mesh/appmesh-workshop/virtualGateway/ecsworkshop-vgw
+
+
+#secrets:                      # Pass secrets from AWS Systems Manager (SSM) Parameter Store.
+#  GITHUB_TOKEN: GITHUB_TOKEN  # The key is the name of the environment variable, the value is the name of the SSM parameter.
+
+# You can override any of the values defined above by environment.
+#environments:
+#  test:
+#    count: 2               # Number of tasks to run for the "test" environment.
+#    deployment:            # The deployment strategy for the "test" environment.
+#       rolling: 'recreate' # Stops existing tasks before new ones are started for faster deployments.
+healthcheck:
+    # Container health checks: https://aws.github.io/copilot-cli/docs/manifest/backend-service/#image-healthcheck
+    command: ["CMD-SHELL", "curl -s http://localhost:9901/server_info | grep state | grep -q LIVE"]
+    interval: 10s
+    retries: 2
+    timeout: 3s
+    start_period: 0s
+
+# Optional fields for more advanced use-cases.
+sidecars:
+  xray:
+    port: 2000/udp
+    #user: 1337
+    essential: true
+    image: amazon/aws-xray-daemon
+    cpu: 512       # Number of CPU units for the task.
+    memory: 1024    # Amount of memory in MiB used by the task.
+    #entrypoint: ["/usr/bin/xray", "-b", "0.0.0.0:2000", "-o"]
+    healthcheck:
+      interval: 5s
+      timeout: 2s
+      retries: 3
+      command: [
+        "CMD-SHELL",
+        "timeout 1 /bin/bash -c \"</dev/udp/localhost/2000\""
+      ]
+
+taskdef_overrides:
+  # - path: ContainerDefinitions[1].User
+  #   value: 1337
+  - path: ContainerDefinitions[1].User
+    value: 1337
+  # - path: ContainerDefinitions[1].User
+  #   value: 1337
+  # - path: ContainerDefinitions[2].User
+  # #   value: 1337
+  # - path: ProxyConfiguration
+  #   value:
+  #       ContainerName: "envoy"
+  #       Type: "APPMESH"
+  #       ProxyConfigurationProperties:
+  #       - Name: "AppPorts"
+  #         Value: "3000" # nodejs application port
+  #       - Name: "ProxyIngressPort"
+  #         Value: "15000" # side card default config
+  #       - Name: "ProxyEgressPort"
+  #         Value: "15001" # side card default config
+  #       - Name: "EgressIgnoredIPs"
+  #         Value: "169.254.170.2,169.254.169.254"
+  #       - Name: "IgnoredUID"
+  #         Value: "1337" # side card default config

@@ -1,0 +1,135 @@
+# You can use any of these parameters to create conditions or mappings in your template.
+Parameters:
+  App:
+    Type: String
+    Description: Your application's name.
+  Env:
+    Type: String
+    Description: The environment name your service, job, or workflow is being deployed to.
+  Name:
+    Type: String
+    Description: The name of the service, job, or workflow being deployed.
+
+Resources:
+  # Create your resource here, such as an AWS::DynamoDB::Table:
+  # MyTable:
+  #   Type: AWS::DynamoDB::Table
+  #   Properties:
+  #     ...
+  AppMeshVirtualNodeFrontEndv2:
+    Type: AWS::AppMesh::VirtualNode
+    Properties: 
+      MeshName: !Sub 'appmesh-${App}-${Env}'
+      Spec: 
+        Backends:
+        - VirtualService:
+            VirtualServiceName: !Sub "ecsdemo-crystal.${Env}.${App}.local"
+        - VirtualService:
+            VirtualServiceName: !Sub "ecsdemo-nodejs.${Env}.${App}.local"
+        Listeners:
+        - HealthCheck:
+            HealthyThreshold: 3
+            IntervalMillis: 10000
+            Path: "/health"
+            Port: 3000
+            Protocol: "http"
+            TimeoutMillis: 5000
+            UnhealthyThreshold: 3
+          PortMapping:
+            Port: 3000
+            Protocol: "http"
+        ServiceDiscovery:
+          DNS:
+            Hostname: !Sub '${Name}.${Env}.${App}.local'
+        Logging:
+          AccessLog:
+            File:
+              Path: "/dev/stdout"
+      VirtualNodeName: frontendv2
+
+  # AppMeshVirtualRouter:
+  #   Type: AWS::AppMesh::VirtualRouter
+  #   Properties:
+  #     VirtualRouterName: FrontEnd
+  #     MeshName: !Sub 'appmesh-${App}-${Env}'
+  #     Spec:
+  #       Listeners:
+  #       - PortMapping:
+  #           Port: 3000
+  #           Protocol: http
+
+  AppMeshRoute:
+    Type: AWS::AppMesh::Route
+    Properties:
+      RouteName: "frontend-ab"
+      MeshName: !Sub 'appmesh-${App}-${Env}'
+      VirtualRouterName: FrontEnd
+      Spec:
+        Priority: 0
+        HttpRoute:
+          Match:
+            Prefix: "/"
+          Action:
+            WeightedTargets:
+            - VirtualNode: frontend
+              Port: 3000
+              Weight: 1
+            - VirtualNode: !GetAtt AppMeshVirtualNodeFrontEndv2.VirtualNodeName
+              Port: 3000
+              Weight: 1
+
+  AppMeshVirtualServiceFrontEndv2:
+    Type: AWS::AppMesh::VirtualService
+    Properties:
+      MeshName: !Sub 'appmesh-${App}-${Env}'
+      Spec: 
+        Provider:
+          VirtualRouter:
+              VirtualRouterName: FrontEnd
+      VirtualServiceName: !Sub '${Name}.${Env}.${App}.local'
+
+  # AppMeshVirtualGatewayRoute:
+  #   Type: AWS::AppMesh::GatewayRoute
+  #   Properties: 
+  #     GatewayRouteName: frontend2-router
+  #     MeshName: !Sub 'appmesh-${App}-${Env}'
+  #     Spec: 
+  #       HttpRoute: 
+  #         Action:
+  #           Target: 
+  #             Port: 3000
+  #             VirtualService: 
+  #               VirtualServiceName: !GetAtt AppMeshVirtualService2FrontEnd.VirtualServiceName
+  #         Match:
+  #           Port: 3000
+  #     VirtualGatewayName: !Sub 'appmeshvgw-${App}-${Env}'
+
+
+
+
+
+
+  # 1. In addition to your resource, if you need to access the resource from your ECS task 
+  # then you need to create an AWS::IAM::ManagedPolicy that holds the permissions for your resource.
+  #
+  # For example, below is a sample policy for MyTable:
+ 
+
+Outputs:
+  # 1. You need to output the IAM ManagedPolicy so that Copilot can add it as a managed policy to your ECS task role.
+  AppmeshResourceArn:
+    Description: ARN of the VirtualNode
+    Value: !Ref AppMeshVirtualNodeFrontEndv2
+  CrystalUrl:
+    Description: URL of Crystal Service
+    Value: !Sub "http://ecsdemo-crystal.${Env}.${App}.local:3000/crystal"
+  NodejsUrl:
+    Description: URL of Nodejs Service
+    Value: !Sub "http://ecsdemo-nodejs.${Env}.${App}.local:3000"
+  # 2. If you want to inject a property of your resource as an environment variable to your ECS task,
+  # then you need to define an output for it.
+  #
+  # For example, the output MyTableName will be injected in capital snake case, MY_TABLE_NAME, to your task.
+  # MyTableName:
+  #   Description: "The name of this DynamoDB."
+  #   Value: !Ref MyTable

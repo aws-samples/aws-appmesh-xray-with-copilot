@@ -1,0 +1,74 @@
+# You can use any of these parameters to create conditions or mappings in your template.
+Parameters:
+  App:
+    Type: String
+    Description: Your application's name.
+  Env:
+    Type: String
+    Description: The environment name your service, job, or workflow is being deployed to.
+  Name:
+    Type: String
+    Description: The name of the service, job, or workflow being deployed.
+
+Resources:
+  # Create your resource here, such as an AWS::DynamoDB::Table:
+  # MyTable:
+  #   Type: AWS::DynamoDB::Table
+  #   Properties:
+  #     ...
+
+  # 1. In addition to your resource, if you need to access the resource from your ECS task 
+  # then you need to create an AWS::IAM::ManagedPolicy that holds the permissions for your resource.
+  #
+  # For example, below is a sample policy for MyTable:
+  AppMeshGatewayAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AppMesh
+            Effect: Allow
+            Action:
+              - appmesh:StreamAggregatedResources
+              - ec2:DescribeSubnets
+            Resource: "*"
+
+  XRayPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: XRayActions
+            Effect: Allow
+            Action:
+              - logs:PutLogEvents
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:DescribeLogStreams
+              - logs:DescribeLogGroups
+              - xray:PutTraceSegments
+              - xray:PutTelemetryRecords
+              - xray:GetSamplingRules
+              - xray:GetSamplingTargets
+              - xray:GetSamplingStatisticSummaries
+              - ssm:GetParameters
+            Resource: "*"
+
+Outputs:
+  # 1. You need to output the IAM ManagedPolicy so that Copilot can add it as a managed policy to your ECS task role.
+ AppMeshGatewayAccessPolicyARN:
+    Description: "The ARN of the ManagedPolicy to attach to the task role."
+    Value: !Ref AppMeshGatewayAccessPolicy
+
+ XRayPolicy:
+    Description: "The ARN of the ManagedPolicy for XRay to attach to the task role."
+    Value: !Ref XRayPolicy
+  # 2. If you want to inject a property of your resource as an environment variable to your ECS task,
+  # then you need to define an output for it.
+  #
+  # For example, the output MyTableName will be injected in capital snake case, MY_TABLE_NAME, to your task.
+  # MyTableName:
+  #   Description: "The name of this DynamoDB."
+  #   Value: !Ref MyTable

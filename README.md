@@ -152,23 +152,27 @@ Using browser Dev Tool, at Network tab you can check that the Response Header co
 
 ### 3.2 Access AWS App Mesh console
 
-Check the Virtual Nodes
+Check the Virtual Nodes, which represent each of our resources/endpoints (ECS services, EKS deployments, or Amazon EC2 instances), hostnames, and listeners.
 
 ![virtualnodes](img/virtualnodes.png)
 
-Check if the Front End Virtual Node has 2 backends
+
+Verify that the Virtual Node frontend has 2 backend services (Crystal and nodejs). Since our frontend sends outbound traffic to these two elements, we say that the Virtual Node frontend has 2 backend services (note that the reference is to services and not to nodes).
 
 ![virtualnodesbackend](img/virtualnodesbackend.png)
 
-The Virtual Services
+
+Check the Virtual Services. Virtual services represent an abstraction of every real service represented by a Virtual Node or a Virtual Router (more details below) that we have in our mesh/application. When one service depends on another, they use the name of the Virtual Service for communication and this traffic is sent to the Virtual Node or Virtual Router that is providing that application service.
 
 ![virtualservices](img/virtualservices.png)
 
-The Virtual Gateway - Ingress
+
+Check the Virtual Gateway. The Virtual Gateway is used to allow communication from outside to inside the mesh, such as user access or resource that is not part of the mesh. In our scenario, we created a Network Load Balancer to receive external clients and then send them to the Virtual Gateway (mesh gateway), which in turn has a single route sending to the frontend-router.
 
 ![virtualgateway](img/virtualgateway.png)
 
-The Virtual Router and Routes
+
+Check the Virtual Router and its routes. The Virtual Router is used to manage routes to different Virtual Nodes, specifying paths, weights, timeouts, retries, among others. For example, in our scenario we can use the Virtual Router (instead of sending traffic directly to a Virtual Node) to redirect different versions of our frontend, each version being a Virtual Node. This feature is especially useful when implementing canary or blue/green deployment strategies for certain application services.
 
 ![virtualrouter](img/virtualrouter.png)
 
@@ -176,15 +180,22 @@ The Virtual Router and Routes
 
 ## 4. Observability with X-Ray
 
-Open the CloudWatch service using AWS Console and select Service map under X-Ray traces. Explore the map of our application, the Response time by service, metrics and traces for each tier.
+Open the Amazon CloudWatch service using the AWS Management Console and in the X-Ray traces section on the left-hand side menu, select “Service map”. Explore our app map, response time by service, metrics, and tracking for each level.
 
 ![xrayservicemap](img/xrayservicemap.png)
 
+
+In the X-Ray service map it is possible to graphically verify the communication map between services, the average time in each component, and the number of calls per minute
+
 ![xrayresponsetime](img/xrayresponsetime.png)
+
+
+In the left menu, still in the “X-Ray traces” section, select “Traces”. In this way, it is possible to see a list view of each of the application calls and the total elapsed time (from the entry to the exit of a request). An example would be to view the path and response time that a user received when interacting with the application.
 
 ![xraytraces](img/xraytraces.png)
 
-You can also analyze the flow and Response time of an specific request/trace. Just click on a trace Id
+
+By clicking on an ID from the trace list, it is possible to detail each of the internal calls for that specific client/access, showing the entire path taken by the application. This visualization can be used primarily in troubleshooting scenarios in order to identify errors that affect specific groups of users.
 
 ![xraytracerequest](img/xraytracerequest.png)
 
